@@ -1,15 +1,14 @@
 package info.bitrich.xchangestream.bybit;
 
+import static info.bitrich.xchangestream.core.StreamingExchange.*;
 import static org.knowm.xchange.utils.DigestUtils.bytesToHex;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import dto.BybitSubscribeMessage;
+import info.bitrich.xchangestream.bybit.dto.BybitSubscribeMessage;
 import info.bitrich.xchangestream.service.netty.JsonNettyStreamingService;
 import info.bitrich.xchangestream.service.netty.WebSocketClientCompressionAllowClientNoContextHandler;
 import info.bitrich.xchangestream.service.netty.WebSocketClientHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.websocketx.WebSocketClientHandshaker;
 import io.netty.handler.codec.http.websocketx.extensions.WebSocketClientExtensionHandler;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.CompletableSource;
@@ -19,6 +18,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -47,9 +47,13 @@ public class BybitUserDataStreamingService extends JsonNettyStreamingService {
   @Setter private WebSocketClientHandler.WebSocketMessageHandler channelInactiveHandler = null;
 
   public BybitUserDataStreamingService(String url, ExchangeSpecification spec) {
-    super(url);
+    super(
+        url,
+        65536,
+        (Duration) spec.getExchangeSpecificParametersItem(WS_CONNECTION_TIMEOUT),
+        (Duration) spec.getExchangeSpecificParametersItem(WS_RETRY_DURATION),
+        (Integer) spec.getExchangeSpecificParametersItem(WS_IDLE_TIMEOUT));
     this.spec = spec;
-    // this.setEnableLoggingHandler(true);
   }
 
   @Override
@@ -58,6 +62,7 @@ public class BybitUserDataStreamingService extends JsonNettyStreamingService {
     return conn.andThen(
         (CompletableSource)
             (completable) -> {
+              LOG.info("Connect to BybitUserDataStream with auth");
               login();
               pingPongDisconnectIfConnected();
               pingPongSubscription =
@@ -138,6 +143,7 @@ public class BybitUserDataStreamingService extends JsonNettyStreamingService {
         case "auth":
           {
             isAuthorized = true;
+            LOG.info("Successfully authenticated to data URI");
             resubscribeChannelsAfterLogin();
             break;
           }
@@ -170,30 +176,6 @@ public class BybitUserDataStreamingService extends JsonNettyStreamingService {
   public void pingPongDisconnectIfConnected() {
     if (pingPongSubscription != null && !pingPongSubscription.isDisposed()) {
       pingPongSubscription.dispose();
-    }
-  }
-
-  /**
-   * Custom client handler in order to execute an external, user-provided handler on channel events.
-   */
-  class BybitUserDataWebSocketClientHandler extends NettyWebSocketClientHandler {
-
-    public BybitUserDataWebSocketClientHandler(
-        WebSocketClientHandshaker handshake, WebSocketMessageHandler handler) {
-      super(handshake, handler);
-    }
-
-    @Override
-    public void channelActive(ChannelHandlerContext ctx) {
-      super.channelActive(ctx);
-    }
-
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) {
-      super.channelInactive(ctx);
-      if (channelInactiveHandler != null) {
-        channelInactiveHandler.onMessage("WebSocket Client disconnected!");
-      }
     }
   }
 

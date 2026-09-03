@@ -62,13 +62,17 @@ public class IndependentReserveAdapters {
       case "Filled":
         return Order.OrderStatus.FILLED;
       case "PartiallyFilledAndCancelled":
+      case "PartiallyFilledAndExpired":
+      case "PartiallyFilledAndFailed":
+        // Terminal with a partial execution; PARTIALLY_CANCELED is the only OrderStatus carrying
+        // both facts ("Cancelled, partially-executed order is final status" — see isFinal()).
         return Order.OrderStatus.PARTIALLY_CANCELED;
       case "Cancelled":
         return Order.OrderStatus.CANCELED;
-      case "PartiallyFilledAndExpired":
-        return Order.OrderStatus.EXPIRED;
       case "Expired":
         return Order.OrderStatus.EXPIRED;
+      case "Failed":
+        return Order.OrderStatus.REJECTED;
       default:
         throw new IllegalStateException(
             "Unknown status found in Independent Reserve : " + orderStatus);
@@ -200,7 +204,7 @@ public class IndependentReserveAdapters {
           UserTrade.builder()
               .type(adapeOrderType(trade.getOrderType()))
               .originalAmount(trade.getVolumeTraded())
-              .currencyPair(currencyPair)
+              .instrument(currencyPair)
               .price(trade.getPrice())
               .timestamp(trade.getTradeTimestamp())
               .id(trade.getTradeGuid())
@@ -285,18 +289,16 @@ public class IndependentReserveAdapters {
     } else if (transaction.getCredit() != null) {
       amount = transaction.getCredit();
     }
-    return new FundingRecord(
-        null,
-        transaction.getCreatedTimestamp(),
-        new Currency(transaction.getCurrencyCode()),
-        amount,
-        null,
-        adaptTransactionHash(transaction),
-        adaptTransactionTypeToFundingRecordType(transaction.getType()),
-        adaptTransactionStatusToFundingRecordStatus(transaction.getStatus()),
-        transaction.getBalance(),
-        null,
-        transaction.getComment());
+    return FundingRecord.builder()
+        .date(transaction.getCreatedTimestamp())
+        .currency(Currency.getInstance(transaction.getCurrencyCode()))
+        .amount(amount)
+        .blockchainTransactionHash(adaptTransactionHash(transaction))
+        .type(adaptTransactionTypeToFundingRecordType(transaction.getType()))
+        .status(adaptTransactionStatusToFundingRecordStatus(transaction.getStatus()))
+        .balance(transaction.getBalance())
+        .description(transaction.getComment())
+        .build();
   }
 
   public static CurrencyPair adaptBrokerageCurrencyPair(

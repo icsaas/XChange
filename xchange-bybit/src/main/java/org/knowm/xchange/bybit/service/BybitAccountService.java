@@ -1,13 +1,5 @@
 package org.knowm.xchange.bybit.service;
 
-import static org.knowm.xchange.bybit.BybitAdapters.adaptBybitBalances;
-import static org.knowm.xchange.bybit.BybitAdapters.convertToBybitSymbol;
-
-import java.io.IOException;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.knowm.xchange.bybit.BybitAdapters;
 import org.knowm.xchange.bybit.BybitExchange;
 import org.knowm.xchange.bybit.dto.BybitCategory;
@@ -28,6 +20,15 @@ import org.knowm.xchange.service.account.AccountService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.knowm.xchange.bybit.BybitAdapters.adaptBybitBalances;
+import static org.knowm.xchange.bybit.BybitAdapters.convertToBybitSymbol;
+
 public class BybitAccountService extends BybitAccountServiceRaw implements AccountService {
 
   private final Logger LOG = LoggerFactory.getLogger(BybitAccountService.class);
@@ -47,14 +48,8 @@ public class BybitAccountService extends BybitAccountServiceRaw implements Accou
     return new AccountInfo(adaptedWallets);
   }
 
-  /**
-   * According to the risk limit, leverage affects the maximum position value that can be opened,
-   * that is, the greater the leverage, the smaller the maximum position value that can be opened,
-   * and vice versa
-   *
-   * @return true, if success
-   */
-  public boolean setLeverage(Instrument instrument, double leverage) throws IOException {
+  @Override
+  public boolean setLeverage(Instrument instrument, int leverage, Object... args) throws IOException {
     BybitCategory category = BybitAdapters.getCategory(instrument);
     int retCode = setLeverageRaw(category, convertToBybitSymbol(instrument), leverage).getRetCode();
     return retCode == 0 || retCode == 110043;

@@ -202,7 +202,7 @@ public final class CoinsphAdapters {
   }
 
   public static Trade adaptTrade(CoinsphPublicTrade coinsphTrade, CurrencyPair currencyPair) {
-    return new Trade.Builder()
+    return Trade.builder()
         .instrument(currencyPair)
         .originalAmount(coinsphTrade.getQty())
         .price(coinsphTrade.getPrice())
@@ -385,7 +385,7 @@ public final class CoinsphAdapters {
     String tradeId = String.valueOf(coinsphTrade.getId());
     String orderId = String.valueOf(coinsphTrade.getOrderId());
 
-    return new UserTrade.Builder()
+    return UserTrade.builder()
         .instrument(currencyPair)
         .id(tradeId)
         .orderId(orderId)
@@ -435,25 +435,28 @@ public final class CoinsphAdapters {
         status = FundingRecord.Status.PROCESSING;
         break;
       case 1:
+      case 3:
         status = FundingRecord.Status.COMPLETE;
+        break;
+      case 2:
+        status = FundingRecord.Status.FAILED;
         break;
       default:
         status = FundingRecord.Status.PROCESSING;
     }
 
-    return new FundingRecord.Builder()
-        .setAddress(depositRecord.getAddress())
-        .setAddressTag(depositRecord.getAddressTag())
-        .setAmount(depositRecord.getAmount())
-        .setCurrency(new Currency(depositRecord.getCoin()))
-        .setDate(new Date(depositRecord.getInsertTime()))
-        .setFee(BigDecimal.ZERO) // Deposits typically don't have fees
-        .setInternalId(depositRecord.getId())
-        .setInternalId(depositRecord.getId())
-        .setStatus(status)
-        .setType(FundingRecord.Type.DEPOSIT)
-        .setDescription("Deposit via " + depositRecord.getNetwork())
-        .setBlockchainTransactionHash(depositRecord.getTxId())
+    return FundingRecord.builder()
+        .address(depositRecord.getAddress())
+        .addressTag(depositRecord.getAddressTag())
+        .amount(depositRecord.getAmount())
+        .currency(new Currency(depositRecord.getCoin()))
+        .date(new Date(depositRecord.getInsertTime()))
+        .fee(BigDecimal.ZERO) // Deposits typically don't have fees
+        .internalId(depositRecord.getId())
+        .status(status)
+        .type(FundingRecord.Type.DEPOSIT)
+        .description("Deposit via " + depositRecord.getNetwork())
+        .blockchainTransactionHash(depositRecord.getTxId())
         .build();
   }
 
@@ -475,9 +478,6 @@ public final class CoinsphAdapters {
       case 2:
         status = FundingRecord.Status.FAILED;
         break;
-      case 3:
-        status = FundingRecord.Status.CANCELLED;
-        break;
       default:
         status = FundingRecord.Status.PROCESSING;
     }
@@ -487,18 +487,18 @@ public final class CoinsphAdapters {
       description = "Withdrawal via " + withdrawalRecord.getNetwork();
     }
 
-    return new FundingRecord.Builder()
-        .setAddress(withdrawalRecord.getAddress())
-        .setAddressTag(withdrawalRecord.getAddressTag())
-        .setAmount(withdrawalRecord.getAmount())
-        .setCurrency(new Currency(withdrawalRecord.getCoin()))
-        .setDate(new Date(withdrawalRecord.getApplyTime()))
-        .setFee(withdrawalRecord.getTransactionFee())
-        .setInternalId(withdrawalRecord.getId())
-        .setStatus(status)
-        .setType(FundingRecord.Type.WITHDRAWAL)
-        .setDescription(description)
-        .setBlockchainTransactionHash(withdrawalRecord.getTxId())
+    return FundingRecord.builder()
+        .address(withdrawalRecord.getAddress())
+        .addressTag(withdrawalRecord.getAddressTag())
+        .amount(withdrawalRecord.getAmount())
+        .currency(new Currency(withdrawalRecord.getCoin()))
+        .date(new Date(withdrawalRecord.getApplyTime()))
+        .fee(withdrawalRecord.getTransactionFee())
+        .internalId(withdrawalRecord.getId())
+        .status(status)
+        .type(FundingRecord.Type.WITHDRAWAL)
+        .description(description)
+        .blockchainTransactionHash(withdrawalRecord.getTxId())
         .build();
   }
 
@@ -511,17 +511,15 @@ public final class CoinsphAdapters {
   public static FundingRecord adaptFundingRecord(CoinsphFundingRecord fundingRecord) {
     FundingRecord.Status status;
     switch (fundingRecord.getStatus()) {
-      case 0:
+      case 0: // 0 - PROCESSING
         status = FundingRecord.Status.PROCESSING;
         break;
-      case 1:
+      case 1: // 1 - SUCCESS
+      case 3: // 3 - NEED_FILL_DATA(travel rule info), however money is available to user
         status = FundingRecord.Status.COMPLETE;
         break;
-      case 2:
+      case 2: // 2 - FAILED
         status = FundingRecord.Status.FAILED;
-        break;
-      case 3:
-        status = FundingRecord.Status.CANCELLED;
         break;
       default:
         status = FundingRecord.Status.PROCESSING;
@@ -533,19 +531,18 @@ public final class CoinsphAdapters {
             ? FundingRecord.Type.DEPOSIT
             : FundingRecord.Type.WITHDRAWAL;
 
-    return new FundingRecord.Builder()
-        .setAddress(fundingRecord.getAddress())
-        .setAddressTag(fundingRecord.getAddressTag())
-        .setAmount(fundingRecord.getAmount())
-        .setCurrency(new Currency(fundingRecord.getCurrency()))
-        .setDate(fundingRecord.getTimestamp())
-        .setFee(fundingRecord.getFee())
-        .setInternalId(fundingRecord.getId())
-        .setInternalId(fundingRecord.getId())
-        .setStatus(status)
-        .setType(type)
-        .setDescription(fundingRecord.getDescription())
-        .setBlockchainTransactionHash(fundingRecord.getTxId())
+    return FundingRecord.builder()
+        .address(fundingRecord.getAddress())
+        .addressTag(fundingRecord.getAddressTag())
+        .amount(fundingRecord.getAmount())
+        .currency(new Currency(fundingRecord.getCurrency()))
+        .date(fundingRecord.getTimestamp())
+        .fee(fundingRecord.getFee())
+        .internalId(fundingRecord.getId())
+        .status(status)
+        .type(type)
+        .description(fundingRecord.getDescription())
+        .blockchainTransactionHash(fundingRecord.getTxId())
         .build();
   }
 

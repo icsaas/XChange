@@ -1,24 +1,12 @@
 package org.knowm.xchange.gateio.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Collection;
-import java.util.Date;
 import org.junit.jupiter.api.Test;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.Order;
 import org.knowm.xchange.dto.Order.OrderStatus;
 import org.knowm.xchange.dto.Order.OrderType;
-import org.knowm.xchange.dto.trade.LimitOrder;
-import org.knowm.xchange.dto.trade.MarketOrder;
-import org.knowm.xchange.dto.trade.OpenOrders;
-import org.knowm.xchange.dto.trade.UserTrade;
-import org.knowm.xchange.dto.trade.UserTrades;
+import org.knowm.xchange.dto.trade.*;
 import org.knowm.xchange.exceptions.FundsExceededException;
 import org.knowm.xchange.gateio.GateioExchangeWiremock;
 import org.knowm.xchange.gateio.dto.trade.GateioUserTrade;
@@ -27,6 +15,15 @@ import org.knowm.xchange.gateio.service.params.GateioTradeHistoryParams;
 import org.knowm.xchange.service.trade.params.DefaultCancelOrderByInstrumentAndIdParams;
 import org.knowm.xchange.service.trade.params.orders.DefaultOpenOrdersParamInstrument;
 import org.knowm.xchange.service.trade.params.orders.DefaultQueryOrderParamInstrument;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.Date;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class GateioTradeServiceTest extends GateioExchangeWiremock {
 
@@ -162,7 +159,8 @@ class GateioTradeServiceTest extends GateioExchangeWiremock {
         gateioTradeService.getOrder(
             new DefaultQueryOrderParamInstrument(new CurrencyPair("FREE/USDT"), "874190804193"));
     assertThat(orders).hasSize(1);
-    assertThat(orders).first()
+    assertThat(orders)
+        .first()
         .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
         .usingRecursiveComparison()
         .isEqualTo(expected);
@@ -176,6 +174,7 @@ class GateioTradeServiceTest extends GateioExchangeWiremock {
             .limitPrice(new BigDecimal("80000"))
             .timestamp(Date.from(Instant.parse("2024-12-05T23:46:54.447Z")))
             .originalAmount(new BigDecimal("0.00012"))
+            .cumulativeAmount(BigDecimal.ZERO)
             .orderStatus(OrderStatus.OPEN)
             .fee(BigDecimal.ZERO)
             .userReference("web")
@@ -196,6 +195,7 @@ class GateioTradeServiceTest extends GateioExchangeWiremock {
             .limitPrice(new BigDecimal("80000"))
             .timestamp(Date.from(Instant.parse("2024-12-05T23:46:54.447Z")))
             .originalAmount(new BigDecimal("0.00012"))
+            .cumulativeAmount(BigDecimal.ZERO)
             .orderStatus(OrderStatus.OPEN)
             .fee(BigDecimal.ZERO)
             .userReference("web")
@@ -223,18 +223,19 @@ class GateioTradeServiceTest extends GateioExchangeWiremock {
     assertThat(userTrades.getUserTrades()).hasSize(2);
 
     GateioUserTrade expected =
-        new GateioUserTrade(
-            OrderType.ASK,
-            new BigDecimal("0.00005"),
-            CurrencyPair.BTC_USDT,
-            new BigDecimal("29447.2"),
-            Date.from(Instant.ofEpochMilli(1691702286356L)),
-            "6068789332",
-            "381064942553",
-            new BigDecimal("0.00294472"),
-            Currency.USDT,
-            "-",
-            Role.TAKER);
+        GateioUserTrade.builder()
+            .type(OrderType.ASK)
+            .originalAmount(new BigDecimal("0.00005"))
+            .instrument(CurrencyPair.BTC_USDT)
+            .price(new BigDecimal("29447.2"))
+            .timestamp(Date.from(Instant.ofEpochMilli(1691702286356L)))
+            .id("6068789332")
+            .orderId("381064942553")
+            .feeAmount(new BigDecimal("0.00294472"))
+            .feeCurrency(Currency.USDT)
+            .orderUserReference("-")
+            .role(Role.TAKER)
+            .build();
 
     UserTrade actual = userTrades.getUserTrades().get(0);
 

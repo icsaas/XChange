@@ -2,15 +2,15 @@ package org.knowm.xchange.deribit.v2.dto.trade;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy.SnakeCaseStrategy;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.Instant;
 import lombok.Data;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonNaming(SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @Data
 public class Settlement {
 
@@ -18,7 +18,7 @@ public class Settlement {
   private SettlementType type;
 
   /** The timestamp (seconds since the Unix epoch, with millisecond precision) */
-  private long timestamp;
+  private Instant timestamp;
 
   /** total value of session profit and losses (in base currency) */
   private BigDecimal sessionProfitLoss;
@@ -55,8 +55,4 @@ public class Settlement {
 
   /** the amount of the socialized losses (in base currency; bankruptcy only) */
   private BigDecimal socialized;
-
-  public Date getTimestamp() {
-    return new Date(timestamp);
-  }
 }

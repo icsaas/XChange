@@ -1,9 +1,5 @@
 package org.knowm.xchange.service.account;
 
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
 import org.knowm.xchange.Exchange;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.dto.account.AccountInfo;
@@ -19,6 +15,11 @@ import org.knowm.xchange.service.account.params.RequestDepositAddressParams;
 import org.knowm.xchange.service.trade.params.DefaultWithdrawFundsParams;
 import org.knowm.xchange.service.trade.params.TradeHistoryParams;
 import org.knowm.xchange.service.trade.params.WithdrawFundsParams;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Interface to provide the following to {@link Exchange}:
@@ -226,5 +227,16 @@ public interface AccountService extends BaseService {
   default Map<Instrument, Fee> getDynamicTradingFeesByInstrument(String... category)
       throws IOException {
     throw new NotYetImplementedForExchangeException("getDynamicTradingFeesByInstrument");
+  }
+
+  /**
+   * Change user's initial leverage of specific symbol market.
+   *
+   * @param instrument symbol to change leverage
+   * @param leverage leverage
+   * @return true, if success
+   */
+  default boolean setLeverage(Instrument instrument, int leverage, Object... args) throws IOException {
+    throw new NotYetImplementedForExchangeException("setLeverage");
   }
 }

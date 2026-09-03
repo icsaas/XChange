@@ -1,13 +1,5 @@
 package org.knowm.xchange.binance.service;
 
-import static org.knowm.xchange.binance.BinanceAdapters.adaptSymbol;
-import static org.knowm.xchange.binance.BinanceAdapters.toSymbol;
-import static org.knowm.xchange.binance.BinanceExchange.EXCHANGE_TYPE;
-
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.*;
 import org.apache.commons.lang3.StringUtils;
 import org.knowm.xchange.binance.BinanceAdapters;
 import org.knowm.xchange.binance.BinanceErrorAdapter;
@@ -20,6 +12,7 @@ import org.knowm.xchange.binance.dto.account.futures.BinanceFutureAccountInforma
 import org.knowm.xchange.binance.dto.account.futures.BinanceFutureCommissionRate;
 import org.knowm.xchange.client.ResilienceRegistries;
 import org.knowm.xchange.currency.Currency;
+import org.knowm.xchange.derivative.FuturesContract;
 import org.knowm.xchange.dto.account.*;
 import org.knowm.xchange.dto.account.FundingRecord.Status;
 import org.knowm.xchange.dto.account.FundingRecord.Type;
@@ -27,6 +20,15 @@ import org.knowm.xchange.instrument.Instrument;
 import org.knowm.xchange.service.account.AccountService;
 import org.knowm.xchange.service.account.params.RequestDepositAddressParams;
 import org.knowm.xchange.service.trade.params.*;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.*;
+
+import static org.knowm.xchange.binance.BinanceAdapters.adaptSymbol;
+import static org.knowm.xchange.binance.BinanceAdapters.toSymbol;
+import static org.knowm.xchange.binance.BinanceExchange.EXCHANGE_TYPE;
 
 public class BinanceAccountService extends BinanceAccountServiceRaw implements AccountService {
 
@@ -81,6 +83,34 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
         return Status.COMPLETE;
       default:
         throw new RuntimeException("Unknown binance deposit status: " + status);
+    }
+  }
+
+  /**
+   * Maps fiat order status to FundingRecord.Status. Status values: Processing, Failed, Successful,
+   * Finished, Refunding, Refunded, Refund Failed, Order Partial credit Stopped, Expired
+   */
+  private static FundingRecord.Status fiatOrderStatus(String status) {
+    if (status == null) {
+      return Status.FAILED;
+    }
+    switch (status) {
+      case "Processing":
+      case "Refunding":
+      case "Order Partial credit Stopped":
+        return Status.PROCESSING;
+      case "Successful":
+      case "Finished":
+        return Status.COMPLETE;
+      case "Failed":
+      case "Refund Failed":
+      case "Expired":
+        return Status.FAILED;
+      case "Refunded":
+        return Status.CANCELLED;
+      default:
+        Status resolved = Status.resolveStatus(status);
+        return resolved != null ? resolved : Status.FAILED;
     }
   }
 
@@ -366,19 +396,18 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
             .forEach(
                 w ->
                     result.add(
-                        new FundingRecord(
-                            w.getAddress(),
-                            w.getAddressTag(),
-                            BinanceAdapters.toDate(w.getApplyTime()),
-                            Currency.getInstance(w.getCoin()),
-                            w.getAmount(),
-                            w.getId(),
-                            w.getTxId(),
-                            Type.WITHDRAWAL,
-                            withdrawStatus(w.getStatus()),
-                            null,
-                            w.getTransactionFee(),
-                            null)));
+                        FundingRecord.builder()
+                            .address(w.getAddress())
+                            .addressTag(w.getAddressTag())
+                            .date(BinanceAdapters.toDate(w.getApplyTime()))
+                            .currency(Currency.getInstance(w.getCoin()))
+                            .amount(w.getAmount())
+                            .internalId(w.getId())
+                            .blockchainTransactionHash(w.getTxId())
+                            .type(Type.WITHDRAWAL)
+                            .status(withdrawStatus(w.getStatus()))
+                            .fee(w.getTransactionFee())
+                            .build()));
       }
 
       if (deposits) {
@@ -386,19 +415,16 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
             .forEach(
                 d ->
                     result.add(
-                        new FundingRecord(
-                            d.getAddress(),
-                            d.getAddressTag(),
-                            new Date(d.getInsertTime()),
-                            Currency.getInstance(d.getCoin()),
-                            d.getAmount(),
-                            null,
-                            d.getTxId(),
-                            Type.DEPOSIT,
-                            depositStatus(d.getStatus()),
-                            null,
-                            null,
-                            null)));
+                        FundingRecord.builder()
+                            .address(d.getAddress())
+                            .addressTag(d.getAddressTag())
+                            .date(new Date(d.getInsertTime()))
+                            .currency(Currency.getInstance(d.getCoin()))
+                            .amount(d.getAmount())
+                            .blockchainTransactionHash(d.getTxId())
+                            .type(Type.DEPOSIT)
+                            .status(depositStatus(d.getStatus()))
+                            .build()));
       }
 
       if (otherInflow) {
@@ -406,19 +432,15 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
             .forEach(
                 a ->
                     result.add(
-                        new FundingRecord(
-                            null,
-                            null,
-                            new Date(a.getDivTime()),
-                            Currency.getInstance(a.getAsset()),
-                            a.getAmount(),
-                            null,
-                            String.valueOf(a.getTranId()),
-                            Type.OTHER_INFLOW,
-                            Status.COMPLETE,
-                            null,
-                            null,
-                            a.getEnInfo())));
+                        FundingRecord.builder()
+                            .date(new Date(a.getDivTime()))
+                            .currency(Currency.getInstance(a.getAsset()))
+                            .amount(a.getAmount())
+                            .blockchainTransactionHash(String.valueOf(a.getTranId()))
+                            .type(Type.OTHER_INFLOW)
+                            .status(Status.COMPLETE)
+                            .description(a.getEnInfo())
+                            .build()));
       }
 
       final String finalEmail = email;
@@ -428,13 +450,13 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
             .forEach(
                 a ->
                     result.add(
-                        new FundingRecord.Builder()
-                            .setAddress(finalEmail)
-                            .setDate(new Date(a.getTime()))
-                            .setCurrency(Currency.getInstance(a.getAsset()))
-                            .setAmount(a.getQty())
-                            .setType(Type.INTERNAL_WITHDRAWAL)
-                            .setStatus(transferHistoryStatus(a.getStatus()))
+                        FundingRecord.builder()
+                            .address(finalEmail)
+                            .date(new Date(a.getTime()))
+                            .currency(Currency.getInstance(a.getAsset()))
+                            .amount(a.getQty())
+                            .type(Type.INTERNAL_WITHDRAWAL)
+                            .status(transferHistoryStatus(a.getStatus()))
                             .build()));
       }
 
@@ -445,20 +467,92 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
             .forEach(
                 a ->
                     result.add(
-                        new FundingRecord.Builder()
-                            .setAddress(a.getEmail())
-                            .setDate(new Date(a.getTime()))
-                            .setCurrency(Currency.getInstance(a.getAsset()))
-                            .setAmount(a.getQty())
-                            .setType(
+                        FundingRecord.builder()
+                            .address(a.getEmail())
+                            .date(new Date(a.getTime()))
+                            .currency(Currency.getInstance(a.getAsset()))
+                            .amount(a.getQty())
+                            .type(
                                 a.getType().equals(1)
                                     ? Type.INTERNAL_DEPOSIT
                                     : Type.INTERNAL_WITHDRAWAL)
-                            .setStatus(Status.COMPLETE)
+                            .status(Status.COMPLETE)
+                            .build()));
+      }
+
+      // Fetch fiat deposit/withdrawal history
+      if (deposits) {
+        super.getFiatOrders("0", startTime, endTime, page, limit)
+            .forEach(
+                f ->
+                    result.add(
+                        FundingRecord.builder()
+                            .internalId(f.getOrderNo())
+                            .date(new Date(f.getCreateTime()))
+                            .currency(Currency.getInstance(f.getFiatCurrency()))
+                            .amount(f.getAmount())
+                            .fee(f.getTotalFee())
+                            .type(Type.DEPOSIT)
+                            .status(fiatOrderStatus(f.getStatus()))
+                            .description(f.getMethod())
+                            .build()));
+      }
+
+      if (withdrawals) {
+        super.getFiatOrders("1", startTime, endTime, page, limit)
+            .forEach(
+                f ->
+                    result.add(
+                        FundingRecord.builder()
+                            .internalId(f.getOrderNo())
+                            .date(new Date(f.getCreateTime()))
+                            .currency(Currency.getInstance(f.getFiatCurrency()))
+                            .amount(f.getAmount())
+                            .fee(f.getTotalFee())
+                            .type(Type.WITHDRAWAL)
+                            .status(fiatOrderStatus(f.getStatus()))
+                            .description(f.getMethod())
                             .build()));
       }
 
       return result;
+    } catch (BinanceException e) {
+      throw BinanceErrorAdapter.adapt(e);
+    }
+  }
+
+  @Override
+  public boolean setLeverage(Instrument instrument, int leverage, Object... args) throws IOException {
+    if (instrument instanceof FuturesContract) {
+      return setLeverageRaw(instrument, leverage).leverage == leverage;
+    } else return false;
+  }
+
+  public BinanceSimpleAccount getSimpleAccount() throws IOException {
+    try {
+      return super.getSimpleAccount();
+    } catch (BinanceException e) {
+      throw BinanceErrorAdapter.adapt(e);
+    }
+  }
+
+  public List<BinanceFlexiblePosition> getFlexiblePositions(
+      String asset, String productId, Long current, Long size) throws IOException {
+    try {
+      BinanceFlexiblePositionResponse response =
+          super.getFlexiblePositionsRaw(asset, productId, current, size);
+      return response != null ? response.getData() : List.of();
+    } catch (BinanceException e) {
+      throw BinanceErrorAdapter.adapt(e);
+    }
+  }
+
+  public List<BinanceLockedPosition> getLockedPositions(
+      String asset, Long positionId, String projectId, Long current, Long size) throws IOException {
+    try {
+      BinanceLockedPositionResponse response =
+          super.getLockedPositionsRaw(asset, positionId, projectId, current, size);
+      return response != null ? response.getData() : List.of();
     } catch (BinanceException e) {
       throw BinanceErrorAdapter.adapt(e);
     }

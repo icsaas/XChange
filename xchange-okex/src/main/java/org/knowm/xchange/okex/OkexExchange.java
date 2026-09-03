@@ -1,5 +1,6 @@
 package org.knowm.xchange.okex;
 
+import static org.knowm.xchange.okex.OkexAdapters.adaptOkexInstrumentId;
 import static org.knowm.xchange.okex.dto.OkexInstType.SPOT;
 import static org.knowm.xchange.okex.dto.OkexInstType.SWAP;
 
@@ -16,12 +17,17 @@ import org.knowm.xchange.okex.service.OkexMarketDataServiceRaw;
 import org.knowm.xchange.okex.service.OkexTradeService;
 import si.mazi.rescu.SynchronizedValueFactory;
 
+import java.io.IOException;
+import java.util.List;
+
+import static org.knowm.xchange.okex.dto.OkexInstType.SPOT;
+import static org.knowm.xchange.okex.dto.OkexInstType.SWAP;
+
 /** Author: Max Gao (gaamox@tutanota.com) Created: 08-06-2021 */
 public class OkexExchange extends BaseExchange {
 
   public static final String PARAM_USE_AWS = "Use_AWS";
-  public static final String PARAM_AWS_SSL_URI = "AWSSslUri";
-  public static final String PARAM_AWS_HOST = "AWSHost";
+
   public static final String PARAM_SIMULATED = "simulated";
   public static final String PARAM_PASSPHRASE = "passphrase";
   private static ResilienceRegistries RESILIENCE_REGISTRIES;
@@ -29,19 +35,7 @@ public class OkexExchange extends BaseExchange {
   public String accountLevel = "1";
 
   /** Adjust host parameters depending on exchange specific parameters */
-  private static void concludeHostParams(ExchangeSpecification exchangeSpecification) {
-    if (exchangeSpecification.getExchangeSpecificParameters() != null) {
-      final boolean useAWS =
-          Boolean.TRUE.equals(
-              exchangeSpecification.getExchangeSpecificParametersItem(PARAM_USE_AWS));
-      if (useAWS) {
-        exchangeSpecification.setSslUri(
-            (String) exchangeSpecification.getExchangeSpecificParametersItem(PARAM_AWS_SSL_URI));
-        exchangeSpecification.setHost(
-            (String) exchangeSpecification.getExchangeSpecificParametersItem(PARAM_AWS_HOST));
-      }
-    }
-  }
+  protected void concludeHostParams(ExchangeSpecification exchangeSpecification) {}
 
   @Override
   public void applySpecification(ExchangeSpecification exchangeSpecification) {
@@ -71,12 +65,8 @@ public class OkexExchange extends BaseExchange {
     exchangeSpecification.setPort(80);
     exchangeSpecification.setExchangeName("Okex");
     exchangeSpecification.setExchangeDescription("Okx Exchange");
-
+    // not supported anymore
     exchangeSpecification.setExchangeSpecificParametersItem(PARAM_USE_AWS, false);
-    exchangeSpecification.setExchangeSpecificParametersItem(
-        PARAM_AWS_SSL_URI, "https://aws.okx.com");
-    exchangeSpecification.setExchangeSpecificParametersItem(PARAM_AWS_HOST, "aws.okx.com");
-
     return exchangeSpecification;
   }
 
@@ -96,6 +86,16 @@ public class OkexExchange extends BaseExchange {
 
   @Override
   public void remoteInit() throws IOException {
+    updateExchangeMetaData();
+  }
+
+  protected boolean useSandbox() {
+    return Boolean.TRUE.equals(
+        exchangeSpecification.getExchangeSpecificParametersItem(USE_SANDBOX));
+  }
+
+  @Override
+  public void updateExchangeMetaData() throws IOException {
     List<OkexInstrument> instruments =
         ((OkexMarketDataServiceRaw) marketDataService)
             .getOkexInstruments(SPOT.name(), null, null)
@@ -108,6 +108,13 @@ public class OkexExchange extends BaseExchange {
 
     instruments.addAll(swap_instruments);
 
+    instruments.forEach(
+        instrument -> {
+          if (instrument.getInstIdCode() != null)
+            OkexAdapters.instrumentToInstrumentIdMap.put(
+                adaptOkexInstrumentId(instrument.getInstrumentId()),
+                Long.parseLong(instrument.getInstIdCode()));
+        });
     // Currency data is only retrievable through a private endpoint
     List<OkexCurrency> currencies = null;
     if (exchangeSpecification.getApiKey() != null
@@ -123,10 +130,5 @@ public class OkexExchange extends BaseExchange {
     }
 
     exchangeMetaData = OkexAdapters.adaptToExchangeMetaData(instruments, currencies);
-  }
-
-  protected boolean useSandbox() {
-    return Boolean.TRUE.equals(
-        exchangeSpecification.getExchangeSpecificParametersItem(USE_SANDBOX));
   }
 }

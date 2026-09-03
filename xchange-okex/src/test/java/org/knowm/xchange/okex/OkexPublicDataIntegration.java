@@ -1,10 +1,12 @@
 package org.knowm.xchange.okex;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import org.junit.Before;
@@ -15,15 +17,19 @@ import org.knowm.xchange.ExchangeFactory;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.derivative.FuturesContract;
+import org.knowm.xchange.dto.marketdata.CandleStickData;
 import org.knowm.xchange.dto.marketdata.FundingRate;
 import org.knowm.xchange.dto.marketdata.Ticker;
 import org.knowm.xchange.dto.marketdata.Trades;
+import org.knowm.xchange.dto.meta.InstrumentMetaData;
 import org.knowm.xchange.dto.trade.LimitOrder;
 import org.knowm.xchange.instrument.Instrument;
 import org.knowm.xchange.okex.dto.OkexInstType;
 import org.knowm.xchange.okex.dto.OkexResponse;
 import org.knowm.xchange.okex.dto.marketdata.OkexCandleStick;
+import org.knowm.xchange.okex.dto.marketdata.OkxFundingRateHistory;
 import org.knowm.xchange.okex.service.OkexMarketDataService;
+import org.knowm.xchange.service.trade.params.DefaultCandleStickParam;
 
 public class OkexPublicDataIntegration {
 
@@ -51,6 +57,15 @@ public class OkexPublicDataIntegration {
                 assertThat(instrument1.getCounter()).isEqualTo(Currency.USDT);
               }
             });
+    // full BTC/USDT/SWAP check
+    InstrumentMetaData instrumentMetaData =
+        exchange.getExchangeMetaData().getInstruments().get(instrument);
+    assertEquals(0, instrumentMetaData.getContractValue().compareTo(new BigDecimal("0.01")));
+    assertEquals(0, instrumentMetaData.getMinimumAmount().compareTo(new BigDecimal("0.0001")));
+    assertThat(instrumentMetaData.getVolumeScale()).isEqualTo(4);
+    assertEquals(0, instrumentMetaData.getAmountStepSize().compareTo(new BigDecimal("0.0001")));
+    assertThat(instrumentMetaData.getPriceScale()).isEqualTo(1);
+    assertEquals(0, instrumentMetaData.getPriceStepSize().compareTo(new BigDecimal("0.1")));
   }
 
   @Test
@@ -69,7 +84,8 @@ public class OkexPublicDataIntegration {
     Ticker spotTicker = exchange.getMarketDataService().getTicker(currencyPair);
     Ticker swapTicker = exchange.getMarketDataService().getTicker(instrument);
 
-    assertThat(spotTicker.getInstrument()).isEqualTo(currencyPair);
+    assertThat(spotTicker.getInstrument().getBase()).isEqualTo(currencyPair.getBase());
+    assertThat(spotTicker.getInstrument().getCounter()).isEqualTo(Currency.USDT);
     assertThat(swapTicker.getInstrument()).isEqualTo(instrument);
   }
 
@@ -103,6 +119,17 @@ public class OkexPublicDataIntegration {
         ((OkexMarketDataService) exchange.getMarketDataService())
             .getHistoryCandle("BTC-USDT", null, null, null, null);
     assertTrue(Objects.nonNull(barHistDtos) && !barHistDtos.getData().isEmpty());
+    DefaultCandleStickParam params =
+        new DefaultCandleStickParam(
+            new Date(System.currentTimeMillis() - 10 * 60 * 1000),
+            new Date(System.currentTimeMillis()),
+            60);
+    CandleStickData candleStickData =
+        exchange
+            .getMarketDataService()
+            .getCandleStickData(new FuturesContract("BTC/USDT/SWAP"), params);
+    assertTrue(Objects.nonNull(candleStickData));
+    assertTrue(!candleStickData.getCandleSticks().isEmpty());
   }
 
   @Test
@@ -130,5 +157,22 @@ public class OkexPublicDataIntegration {
     assertThat(OkexAdapters.adaptOkexInstrumentId("BTC-USDT"))
         .isEqualTo(new CurrencyPair("BTC/USDT"));
     assertThat(OkexAdapters.adaptInstrument(new CurrencyPair("BTC/USDT"))).isEqualTo("BTC-USDT");
+    assertThat(OkexAdapters.adaptInstrument(new CurrencyPair("BTC/USDC"))).isEqualTo("BTC-USD");
+  }
+
+  @Test
+  public void testFundingRateHistory() {
+    try {
+      List<OkxFundingRateHistory> fundingRateHistory =
+          ((OkexMarketDataService) exchange.getMarketDataService())
+              .getFundingRateHistory(
+                  instrument,
+                  System.currentTimeMillis() - 24 * 60 * 60 * 1000,
+                  System.currentTimeMillis(),
+                  null);
+      System.out.println(fundingRateHistory);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

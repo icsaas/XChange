@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.knowm.xchange.binance.BinanceAdapters;
 import org.knowm.xchange.binance.BinanceErrorAdapter;
 import org.knowm.xchange.binance.BinanceExchange;
 import org.knowm.xchange.binance.dto.BinanceException;
+import org.knowm.xchange.binance.dto.marketdata.BinanceFundingRateHistory;
 import org.knowm.xchange.binance.dto.marketdata.BinanceOrderbook;
 import org.knowm.xchange.binance.dto.marketdata.BinanceTicker24h;
 import org.knowm.xchange.client.ResilienceRegistries;
@@ -88,6 +90,7 @@ public class BinanceMarketDataService extends BinanceMarketDataServiceRaw
       return ticker24hAllProducts(isFutures).stream()
           .filter(BinanceTicker24h::isValid)
           .map(binanceTicker24h -> BinanceAdapters.toTicker(binanceTicker24h, isFutures))
+          .filter(Objects::nonNull)
           .collect(Collectors.toList());
     } catch (BinanceException e) {
       throw BinanceErrorAdapter.adapt(e);
@@ -146,6 +149,11 @@ public class BinanceMarketDataService extends BinanceMarketDataServiceRaw
     } catch (BinanceException e) {
       throw BinanceErrorAdapter.adapt(e);
     }
+  }
+
+  public List<BinanceFundingRateHistory> getFundingRateHistory(
+      Instrument instrument, Long startTime, Long endTime, Integer limit) throws IOException {
+    return fundingRateHistoryRaw(instrument, startTime, endTime, limit);
   }
 
   public static OrderBook convertOrderBook(BinanceOrderbook ob, Instrument pair) {

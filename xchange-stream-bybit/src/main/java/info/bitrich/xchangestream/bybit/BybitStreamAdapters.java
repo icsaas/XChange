@@ -1,31 +1,31 @@
 package info.bitrich.xchangestream.bybit;
 
-import static org.knowm.xchange.bybit.BybitAdapters.adaptBybitOrderStatus;
-import static org.knowm.xchange.bybit.BybitAdapters.convertBybitSymbolToInstrument;
-import static org.knowm.xchange.bybit.BybitAdapters.getOrderType;
+import static org.knowm.xchange.bybit.BybitAdapters.*;
 
-import dto.marketdata.BybitOrderbook;
-import dto.marketdata.BybitPublicOrder;
-import dto.trade.BybitComplexOrderChanges;
-import dto.trade.BybitComplexPositionChanges;
-import dto.trade.BybitOrderChangesResponse.BybitOrderChanges;
-import dto.trade.BybitOrderFlag;
-import dto.trade.BybitPositionChangesResponse.BybitPositionChanges;
-import dto.trade.BybitTrade;
+import info.bitrich.xchangestream.bybit.dto.marketdata.BybitOrderbook;
+import info.bitrich.xchangestream.bybit.dto.marketdata.BybitPublicOrder;
+import info.bitrich.xchangestream.bybit.dto.trade.*;
+import info.bitrich.xchangestream.bybit.dto.trade.BybitOrderChangesResponse.BybitOrderChanges;
+import info.bitrich.xchangestream.bybit.dto.trade.BybitPositionChangesResponse.BybitPositionChanges;
+import info.bitrich.xchangestream.bybit.dto.trade.BybitStreamBatchAmendOrdersPayload.BybitStreamBatchAmendOrderPayload;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import org.knowm.xchange.bybit.dto.BybitCategory;
+import org.knowm.xchange.bybit.dto.marketdata.candles.BybitCandleStick;
+import org.knowm.xchange.bybit.dto.marketdata.tickers.linear.BybitLinearInverseTicker;
 import org.knowm.xchange.bybit.dto.trade.details.BybitTimeInForce;
 import org.knowm.xchange.dto.Order;
 import org.knowm.xchange.dto.Order.OrderType;
 import org.knowm.xchange.dto.account.OpenPosition;
 import org.knowm.xchange.dto.account.OpenPosition.Type;
 import org.knowm.xchange.dto.account.OpenPositions;
-import org.knowm.xchange.dto.marketdata.OrderBook;
-import org.knowm.xchange.dto.marketdata.Trade;
-import org.knowm.xchange.dto.marketdata.Trade.Builder;
-import org.knowm.xchange.dto.marketdata.Trades;
+import org.knowm.xchange.dto.marketdata.*;
+import org.knowm.xchange.dto.marketdata.FundingRate.FundingRateInterval;
 import org.knowm.xchange.dto.trade.LimitOrder;
 import org.knowm.xchange.dto.trade.MarketOrder;
 import org.knowm.xchange.instrument.Instrument;
@@ -35,7 +35,7 @@ public class BybitStreamAdapters {
   public static OrderBook adaptOrderBook(BybitOrderbook bybitOrderBooks, Instrument instrument) {
     List<LimitOrder> asks = new ArrayList<>();
     List<LimitOrder> bids = new ArrayList<>();
-    Date timestamp = new Date(Long.parseLong(bybitOrderBooks.getTs()));
+    Date timestamp = new Date(bybitOrderBooks.getCts());
     bybitOrderBooks
         .getData()
         .getAsk()
@@ -59,7 +59,7 @@ public class BybitStreamAdapters {
     bybitTrades.forEach(
         bybitTrade ->
             trades.add(
-                new Builder()
+                Trade.builder()
                     .id(bybitTrade.getTradeId())
                     .instrument(instrument)
                     .originalAmount(bybitTrade.getTradeSize())
@@ -139,13 +139,15 @@ public class BybitStreamAdapters {
         liqPrice = new BigDecimal(position.getLiqPrice());
       }
       OpenPosition openPosition =
-          new OpenPosition(
-              convertBybitSymbolToInstrument(position.getSymbol(), position.getCategory()),
-              type,
-              new BigDecimal(position.getSize()),
-              new BigDecimal(position.getEntryPrice()),
-              liqPrice,
-              new BigDecimal(position.getUnrealisedPnl()));
+          OpenPosition.builder()
+              .instrument(
+                  convertBybitSymbolToInstrument(position.getSymbol(), position.getCategory()))
+              .type(type)
+              .size(new BigDecimal(position.getSize()))
+              .price(new BigDecimal(position.getEntryPrice()))
+              .liquidationPrice(liqPrice)
+              .unRealisedPnl(new BigDecimal(position.getUnrealisedPnl()))
+              .build();
       openPositions.getOpenPositions().add(openPosition);
     }
     return openPositions;
@@ -180,39 +182,41 @@ public class BybitStreamAdapters {
         sessionAvgPrice = new BigDecimal(position.getSessionAvgPrice());
       }
       BybitComplexPositionChanges positionChanges =
-          new BybitComplexPositionChanges(
-              convertBybitSymbolToInstrument(position.getSymbol(), position.getCategory()),
-              type,
-              new BigDecimal(position.getSize()),
-              new BigDecimal(position.getEntryPrice()),
-              liqPrice,
-              new BigDecimal(position.getUnrealisedPnl()),
-              position.getPositionIdx(),
-              position.getTradeMode(),
-              position.getRiskId(),
-              position.getRiskLimitValue(),
-              new BigDecimal(position.getMarkPrice()),
-              new BigDecimal(position.getPositionBalance()),
-              position.getAutoAddMargin(),
-              new BigDecimal(position.getPositionMM()),
-              new BigDecimal(position.getPositionIM()),
-              bustPrice,
-              new BigDecimal(position.getPositionValue()),
-              new BigDecimal(position.getLeverage()),
-              new BigDecimal(position.getTakeProfit()),
-              new BigDecimal(position.getStopLoss()),
-              new BigDecimal(position.getTrailingStop()),
-              new BigDecimal(position.getCurRealisedPnl()),
-              new BigDecimal(position.getCumRealisedPnl()),
-              sessionAvgPrice,
-              position.getPositionStatus(),
-              position.getAdlRankIndicator(),
-              position.isReduceOnly(),
-              position.getMmrSysUpdatedTime(),
-              position.getLeverageSysUpdatedTime(),
-              new Date(Long.parseLong(position.getCreatedTime())),
-              new Date(Long.parseLong(position.getUpdatedTime())),
-              position.getSeq());
+          BybitComplexPositionChanges.builder()
+              .instrument(
+                  convertBybitSymbolToInstrument(position.getSymbol(), position.getCategory()))
+              .type(type)
+              .size(new BigDecimal(position.getSize()))
+              .price(new BigDecimal(position.getEntryPrice()))
+              .liquidationPrice(liqPrice)
+              .unRealisedPnl(new BigDecimal(position.getUnrealisedPnl()))
+              .positionIdx(position.getPositionIdx())
+              .tradeMode(position.getTradeMode())
+              .riskId(position.getRiskId())
+              .riskLimitValue(position.getRiskLimitValue())
+              .markPrice(new BigDecimal(position.getMarkPrice()))
+              .positionBalance(new BigDecimal(position.getPositionBalance()))
+              .autoAddMargin(position.getAutoAddMargin())
+              .positionMM(new BigDecimal(position.getPositionMM()))
+              .positionIM(new BigDecimal(position.getPositionIM()))
+              .bustPrice(bustPrice)
+              .positionValue(new BigDecimal(position.getPositionValue()))
+              .leverage(new BigDecimal(position.getLeverage()))
+              .takeProfit(new BigDecimal(position.getTakeProfit()))
+              .stopLoss(new BigDecimal(position.getStopLoss()))
+              .trailingStop(new BigDecimal(position.getTrailingStop()))
+              .curRealisedPnl(new BigDecimal(position.getCurRealisedPnl()))
+              .cumRealisedPnl(new BigDecimal(position.getCumRealisedPnl()))
+              .sessionAvgPrice(sessionAvgPrice)
+              .positionStatus(position.getPositionStatus())
+              .adlRankIndicator(position.getAdlRankIndicator())
+              .isReduceOnly(position.isReduceOnly())
+              .mmrSysUpdatedTime(position.getMmrSysUpdatedTime())
+              .leverageSysUpdatedTime(position.getLeverageSysUpdatedTime())
+              .createdTime(new Date(Long.parseLong(position.getCreatedTime())))
+              .updatedTime(new Date(Long.parseLong(position.getUpdatedTime())))
+              .seq(position.getSeq())
+              .build();
       result.add(positionChanges);
     }
     return result;
@@ -285,5 +289,113 @@ public class BybitStreamAdapters {
       result.add(orderChanges);
     }
     return result;
+  }
+
+  public static BybitStreamBatchAmendOrdersPayload adaptBatchAmendOrder(
+      LimitOrder[] orders, BybitCategory category) {
+    List<BybitStreamBatchAmendOrderPayload> ordersPayload = new ArrayList<>();
+    for (LimitOrder order : orders) {
+      ordersPayload.add(
+          new BybitStreamBatchAmendOrderPayload(
+              convertToBybitSymbol(order.getInstrument()),
+              order.getId(),
+              order.getUserReference(),
+              null,
+              // conditional
+              order.getOriginalAmount() == null ? null : order.getOriginalAmount().toPlainString(),
+              // conditional
+              order.getLimitPrice() == null ? null : order.getLimitPrice().toPlainString(),
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null));
+    }
+    return new BybitStreamBatchAmendOrdersPayload(category, ordersPayload);
+  }
+
+  public static CandleStickData adaptCandles(BybitCandleStick bybitCandle, Instrument instrument) {
+    List<CandleStick> candleSticks = new ArrayList<>();
+    candleSticks.add(
+        new CandleStick.Builder()
+            .timestamp(Instant.ofEpochMilli(bybitCandle.getTimestamp()))
+            .open(new BigDecimal(bybitCandle.getOpen()))
+            .high(new BigDecimal(bybitCandle.getHigh()))
+            .low(new BigDecimal(bybitCandle.getLow()))
+            .close(new BigDecimal(bybitCandle.getClose()))
+            .volume(new BigDecimal(bybitCandle.getVolume()))
+            .quotaVolume(new BigDecimal(bybitCandle.getTurnover()))
+            .completed(bybitCandle.isConfirm())
+            .build());
+    return new CandleStickData(instrument, candleSticks);
+  }
+
+  public static Ticker adaptTicker(BybitLinearInverseTicker bybitTicker) {
+    Instrument instrument =
+        convertBybitSymbolToInstrument(bybitTicker.getSymbol(), BybitCategory.LINEAR);
+    return new Ticker.Builder()
+        .instrument(instrument)
+        .last(bybitTicker.getLastPrice())
+        .bid(bybitTicker.getBid1Price())
+        .bidSize(bybitTicker.getBid1Size())
+        .ask(bybitTicker.getAsk1Price())
+        .askSize(bybitTicker.getAsk1Size())
+        .high(bybitTicker.getHighPrice24h())
+        .low(bybitTicker.getLowPrice24h())
+        .volume(bybitTicker.getVolume24h())
+        .quoteVolume(bybitTicker.getTurnover24h())
+        .percentageChange(
+            bybitTicker.getPrice24hPcnt() != null
+                ? bybitTicker.getPrice24hPcnt().multiply(BigDecimal.valueOf(100))
+                : null)
+        .timestamp(new Date())
+        .build();
+  }
+
+  public static FundingRate adaptFundingRate(BybitLinearInverseTicker bybitTicker) {
+    int interval = bybitTicker.getFundingIntervalHour();
+    BigDecimal fundingRate = bybitTicker.getFundingRate();
+    FundingRateInterval rateInterval = adaptFundingRateInterval(interval);
+    BigDecimal fundingRate1h =
+        fundingRate.divide(
+            BigDecimal.valueOf(interval), fundingRate.scale() + 3, RoundingMode.HALF_UP);
+    return new FundingRate.Builder()
+        .fundingRate1h(fundingRate1h)
+        .fundingRate(fundingRate)
+        .instrument(convertBybitSymbolToInstrument(bybitTicker.getSymbol(), BybitCategory.LINEAR))
+        .fundingRateInterval(rateInterval)
+        .fundingRateDate(bybitTicker.getNextFundingTime())
+        .fundingRateEffectiveInMinutes(
+            TimeUnit.MILLISECONDS.toMinutes(
+                bybitTicker.getNextFundingTime().getTime() - System.currentTimeMillis()))
+        .build();
+  }
+
+  public static FundingRateInterval adaptFundingRateInterval(int interval) {
+    switch (interval) {
+      case 1:
+        {
+          return FundingRateInterval.H1;
+        }
+      case 2:
+        {
+          return FundingRateInterval.H2;
+        }
+      case 4:
+        {
+          return FundingRateInterval.H4;
+        }
+      case 6:
+        {
+          return FundingRateInterval.H6;
+        }
+      default:
+        {
+          return FundingRateInterval.H8;
+        }
+    }
   }
 }

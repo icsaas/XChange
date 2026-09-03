@@ -190,7 +190,7 @@ public class KucoinAdapters {
   }
 
   private static Trade adaptTrade(CurrencyPair currencyPair, TradeHistoryResponse trade) {
-    return new Trade.Builder()
+    return Trade.builder()
         .instrument(currencyPair)
         .originalAmount(trade.getSize())
         .price(trade.getPrice())
@@ -263,7 +263,7 @@ public class KucoinAdapters {
 
   public static UserTrade adaptUserTrade(TradeResponse trade) {
     return UserTrade.builder()
-        .currencyPair(adaptCurrencyPair(trade.getSymbol()))
+        .instrument(adaptCurrencyPair(trade.getSymbol()))
         .feeAmount(trade.getFee())
         .feeCurrency(Currency.getInstance(trade.getFeeCurrency()))
         .id(trade.getTradeId())
@@ -278,7 +278,7 @@ public class KucoinAdapters {
   public static UserTrade adaptHistOrder(HistOrdersResponse histOrder) {
     CurrencyPair currencyPair = adaptCurrencyPair(histOrder.getSymbol());
     return UserTrade.builder()
-        .currencyPair(currencyPair)
+        .instrument(currencyPair)
         .feeAmount(histOrder.getFee())
         .feeCurrency(currencyPair.getBase())
         .id(histOrder.getId())
@@ -292,7 +292,7 @@ public class KucoinAdapters {
   public static OrderCreateApiRequest adaptLimitOrder(LimitOrder limitOrder) {
     return ((OrderCreateApiRequest.OrderCreateApiRequestBuilder) adaptOrder(limitOrder))
         .type("limit")
-        .price(limitOrder.getLimitPrice())
+        .price(limitOrder.getLimitPrice().toPlainString())
         .postOnly(limitOrder.hasFlag(POST_ONLY))
         .hidden(limitOrder.hasFlag(HIDDEN))
         .iceberg(limitOrder.hasFlag(ICEBERG))
@@ -302,9 +302,9 @@ public class KucoinAdapters {
   public static OrderCreateApiRequest adaptStopOrder(StopOrder stopOrder) {
     return ((OrderCreateApiRequest.OrderCreateApiRequestBuilder) adaptOrder(stopOrder))
         .type(stopOrder.getLimitPrice() == null ? "market" : "limit")
-        .price(stopOrder.getLimitPrice())
+        .price(stopOrder.getLimitPrice().toPlainString())
         .stop(stopOrder.getType().equals(ASK) ? "loss" : "entry")
-        .stopPrice(stopOrder.getStopPrice())
+        .stopPrice(stopOrder.getStopPrice().toPlainString())
         .build();
   }
 
@@ -316,11 +316,11 @@ public class KucoinAdapters {
     // on buy order amount corresponds to counter currency
     if (marketOrder.getType() == BID) {
       builder.size(null);
-      builder.funds(marketOrder.getOriginalAmount());
+      builder.funds(marketOrder.getOriginalAmount().toPlainString());
     }
     // on sell order amount corresponds to base currency
     else if (marketOrder.getType() == ASK) {
-      builder.size(marketOrder.getOriginalAmount());
+      builder.size(marketOrder.getOriginalAmount().toPlainString());
       builder.funds(null);
     }
 
@@ -353,7 +353,7 @@ public class KucoinAdapters {
     }
     return request
         .symbol(adaptCurrencyPair((CurrencyPair) order.getInstrument()))
-        .size(order.getOriginalAmount())
+        .size(order.getOriginalAmount().toPlainString())
         .side(adaptSide(order.getType()));
   }
 
@@ -369,17 +369,17 @@ public class KucoinAdapters {
   }
 
   public static FundingRecord adaptFundingRecord(WithdrawalResponse wr) {
-    FundingRecord.Builder b = new FundingRecord.Builder();
-    return b.setAddress(wr.getAddress())
-        .setAmount(wr.getAmount())
-        .setCurrency(Currency.getInstance(wr.getCurrency()))
-        .setFee(wr.getFee())
-        .setType(Type.WITHDRAWAL)
-        .setStatus(convertStatus(wr.getStatus()))
-        .setInternalId(wr.getId())
-        .setBlockchainTransactionHash(wr.getWalletTxId())
-        .setDescription(wr.getMemo())
-        .setDate(wr.getCreatedAt())
+    return FundingRecord.builder()
+        .address(wr.getAddress())
+        .amount(wr.getAmount())
+        .currency(Currency.getInstance(wr.getCurrency()))
+        .fee(wr.getFee())
+        .type(Type.WITHDRAWAL)
+        .status(convertStatus(wr.getStatus()))
+        .internalId(wr.getId())
+        .blockchainTransactionHash(wr.getWalletTxId())
+        .description(wr.getMemo())
+        .date(wr.getCreatedAt())
         .build();
   }
 
@@ -401,16 +401,16 @@ public class KucoinAdapters {
   }
 
   public static FundingRecord adaptFundingRecord(DepositResponse dr) {
-    FundingRecord.Builder b = new FundingRecord.Builder();
-    return b.setAddress(dr.getAddress())
-        .setAmount(dr.getAmount())
-        .setCurrency(Currency.getInstance(dr.getCurrency()))
-        .setFee(dr.getFee())
-        .setType(Type.DEPOSIT)
-        .setStatus(convertStatus(dr.getStatus()))
-        .setBlockchainTransactionHash(dr.getWalletTxId())
-        .setDescription(dr.getMemo())
-        .setDate(dr.getCreatedAt())
+    return FundingRecord.builder()
+        .address(dr.getAddress())
+        .amount(dr.getAmount())
+        .currency(Currency.getInstance(dr.getCurrency()))
+        .fee(dr.getFee())
+        .type(Type.DEPOSIT)
+        .status(convertStatus(dr.getStatus()))
+        .blockchainTransactionHash(dr.getWalletTxId())
+        .description(dr.getMemo())
+        .date(dr.getCreatedAt())
         .build();
   }
 }

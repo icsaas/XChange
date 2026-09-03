@@ -1,8 +1,5 @@
 package org.knowm.xchange.binance;
 
-import static org.knowm.xchange.binance.dto.ExchangeType.SPOT;
-
-import java.util.Map;
 import org.apache.commons.lang3.ObjectUtils;
 import org.knowm.xchange.BaseExchange;
 import org.knowm.xchange.Exchange;
@@ -20,6 +17,11 @@ import org.knowm.xchange.exceptions.ExchangeException;
 import org.knowm.xchange.utils.AuthUtils;
 import si.mazi.rescu.SynchronizedValueFactory;
 
+import java.io.IOException;
+import java.util.Map;
+
+import static org.knowm.xchange.binance.dto.ExchangeType.SPOT;
+
 public class BinanceExchange extends BaseExchange implements Exchange {
 
   public static String EXCHANGE_TYPE = "Exchange_Type";
@@ -32,7 +34,7 @@ public class BinanceExchange extends BaseExchange implements Exchange {
   public static final String SANDBOX_FUTURES_URL = "https://testnet.binancefuture.com";
   public static final String SANDBOX_INVERSE_FUTURES_URL = "https://testnet.binancefuture.com";
 
-  protected static ResilienceRegistries RESILIENCE_REGISTRIES;
+  protected ResilienceRegistries RESILIENCE_REGISTRIES;
   protected SynchronizedValueFactory<Long> timestampFactory;
 
   @Override
@@ -55,7 +57,7 @@ public class BinanceExchange extends BaseExchange implements Exchange {
         "Binance uses timestamp/recvwindow rather than a nonce");
   }
 
-  public static void resetResilienceRegistries() {
+  public void resetResilienceRegistries() {
     RESILIENCE_REGISTRIES = null;
   }
 
@@ -95,6 +97,11 @@ public class BinanceExchange extends BaseExchange implements Exchange {
         exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE));
   }
 
+  public boolean isSpotEnabled() {
+    return ExchangeType.SPOT.equals(
+        exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE));
+  }
+
   public boolean isPortfolioMarginEnabled() {
     return ExchangeType.PORTFOLIO_MARGIN.equals(
         exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE));
@@ -107,44 +114,7 @@ public class BinanceExchange extends BaseExchange implements Exchange {
   @Override
   public void remoteInit() {
     try {
-      BinanceMarketDataServiceRaw marketDataServiceRaw =
-          (BinanceMarketDataServiceRaw) marketDataService;
-      BinanceAccountService accountService = (BinanceAccountService) getAccountService();
-
-      BinanceExchangeInfo exchangeInfo;
-      // get exchange type or SPOT as default
-      ExchangeType exchangeType =
-          (ExchangeType)
-              ObjectUtils.defaultIfNull(
-                  exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE), SPOT);
-
-      switch (exchangeType) {
-        case FUTURES:
-          exchangeInfo = marketDataServiceRaw.getFutureExchangeInfo();
-          BinanceAdapters.adaptFutureExchangeMetaData(exchangeMetaData, exchangeInfo);
-          break;
-        default:
-          Map<String, AssetDetail> assetDetailMap = null;
-          if (!usingSandbox() && isAuthenticated() && !isFuturesEnabled()) {
-            assetDetailMap =
-                accountService.getAssetDetails(); // not available in sndbox and Futures
-          }
-          exchangeInfo = marketDataServiceRaw.getExchangeInfo();
-          exchangeMetaData = BinanceAdapters.adaptExchangeMetaData(exchangeInfo, assetDetailMap);
-      }
-
-      // init symbol mappings
-      exchangeInfo.getSymbols().stream()
-          .filter(
-              symbol ->
-                  ObjectUtils.allNotNull(
-                      symbol.getBaseAsset(), symbol.getQuoteAsset(), symbol.getSymbol()))
-          .forEach(
-              symbol ->
-                  BinanceAdapters.putSymbolMapping(
-                      symbol.getSymbol(),
-                      new CurrencyPair(symbol.getBaseAsset(), symbol.getQuoteAsset())));
-
+      updateExchangeMetaData();
     } catch (Exception e) {
       throw new ExchangeException("Failed to initialize: " + e.getMessage(), e);
     }
@@ -157,7 +127,7 @@ public class BinanceExchange extends BaseExchange implements Exchange {
   }
 
   /** Adjust host parameters depending on exchange specific parameters */
-  private static void concludeHostParams(ExchangeSpecification exchangeSpecification) {
+  protected void concludeHostParams(ExchangeSpecification exchangeSpecification) {
     if (exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE) != null) {
       switch ((ExchangeType)
           exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE)) {
@@ -186,6 +156,9 @@ public class BinanceExchange extends BaseExchange implements Exchange {
             }
             break;
           }
+        case PORTFOLIO_MARGIN:
+          exchangeSpecification.setSslUri(PORTFOLIO_MARGIN_URL);
+          break;
       }
     }
   }
@@ -193,5 +166,44 @@ public class BinanceExchange extends BaseExchange implements Exchange {
   private static boolean enabledSandbox(ExchangeSpecification exchangeSpecification) {
     return Boolean.TRUE.equals(
         exchangeSpecification.getExchangeSpecificParametersItem(USE_SANDBOX));
+  }
+
+  @Override
+  public void updateExchangeMetaData() throws IOException {
+    BinanceMarketDataServiceRaw marketDataServiceRaw =
+        (BinanceMarketDataServiceRaw) marketDataService;
+    BinanceAccountService accountService = (BinanceAccountService) getAccountService();
+    BinanceExchangeInfo exchangeInfo;
+    // get exchange type or SPOT as default
+    ExchangeType exchangeType =
+        (ExchangeType)
+            ObjectUtils.defaultIfNull(
+                exchangeSpecification.getExchangeSpecificParametersItem(EXCHANGE_TYPE), SPOT);
+
+    switch (exchangeType) {
+      case FUTURES:
+        exchangeInfo = marketDataServiceRaw.getFutureExchangeInfo();
+        BinanceAdapters.adaptFutureExchangeMetaData(exchangeMetaData, exchangeInfo);
+        break;
+      default:
+        Map<String, AssetDetail> assetDetailMap = null;
+        if (!usingSandbox() && isAuthenticated()) {
+          assetDetailMap = accountService.getAssetDetails(); // not available in sndbox
+        }
+        exchangeInfo = marketDataServiceRaw.getExchangeInfo();
+        exchangeMetaData = BinanceAdapters.adaptExchangeMetaData(exchangeInfo, assetDetailMap);
+    }
+    // init symbol mappings
+    exchangeInfo.getSymbols().stream()
+        .filter(
+            symbol ->
+                ObjectUtils.allNotNull(
+                    symbol.getBaseAsset(), symbol.getQuoteAsset(), symbol.getSymbol()))
+        .forEach(
+            symbol ->
+                BinanceAdapters.putSymbolMapping(
+                    symbol.getSymbol(),
+                    new CurrencyPair(symbol.getBaseAsset(), symbol.getQuoteAsset())));
+
   }
 }

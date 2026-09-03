@@ -24,11 +24,23 @@ public class BybitResilience {
   public static final String ORDER_AMEND_SPOT_RATE_LIMITER = "orderAmendSpot";
   public static final String ORDER_AMEND_OPTION_LIMITER = "orderAmendOption";
 
+  // /v5/order/amend-batch
+  public static final String BATCH_ORDER_AMEND_LINEAR_AND_INVERSE_RATE_LIMITER =
+      "batchOrderAmendLinearAndInverse";
+  public static final String BATCH_ORDER_AMEND_SPOT_RATE_LIMITER = "batchOrderAmendSpot";
+  public static final String BATCH_ORDER_AMEND_OPTION_LIMITER = "batchOrderAmendOption";
+
   // /v5/order/cancel
   public static final String ORDER_CANCEL_LINEAR_AND_INVERSE_RATE_LIMITER =
       "orderCancelLinearAndInverse";
   public static final String ORDER_CANCEL_SPOT_RATE_LIMITER = "orderCancelSpot";
   public static final String ORDER_CANCEL_OPTION_LIMITER = "orderCancelOption";
+
+  // /v5/order/cancel-batch
+  public static final String BATCH_ORDER_CANCEL_LINEAR_AND_INVERSE_RATE_LIMITER =
+      "batchOrderCancelLinearAndInverse";
+  public static final String BATCH_ORDER_CANCEL_SPOT_RATE_LIMITER = "batchOrderCancelSpot";
+  public static final String BATCH_ORDER_CANCEL_OPTION_LIMITER = "batchOrderCancelOption";
 
   // /v5/position/set-leverage
   public static final String POSITION_SET_LEVERAGE_INVERSE_RATE_LIMITER =
@@ -107,6 +119,35 @@ public class BybitResilience {
                 .timeoutDuration(Duration.ofSeconds(1))
                 .build());
 
+    // /order/amend-batch
+    registries
+        .rateLimiters()
+        .rateLimiter(
+            BATCH_ORDER_AMEND_LINEAR_AND_INVERSE_RATE_LIMITER,
+            RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .limitForPeriod(10)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build());
+    registries
+        .rateLimiters()
+        .rateLimiter(
+            BATCH_ORDER_AMEND_SPOT_RATE_LIMITER,
+            RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .limitForPeriod(20)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build());
+    registries
+        .rateLimiters()
+        .rateLimiter(
+            BATCH_ORDER_AMEND_OPTION_LIMITER,
+            RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .limitForPeriod(10)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build());
+
     // /order/cancel
     registries
         .rateLimiters()
@@ -130,6 +171,35 @@ public class BybitResilience {
         .rateLimiters()
         .rateLimiter(
             ORDER_CANCEL_OPTION_LIMITER,
+            RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .limitForPeriod(10)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build());
+
+    // /order/cancel-batch
+    registries
+        .rateLimiters()
+        .rateLimiter(
+            BATCH_ORDER_CANCEL_LINEAR_AND_INVERSE_RATE_LIMITER,
+            RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .limitForPeriod(10)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build());
+    registries
+        .rateLimiters()
+        .rateLimiter(
+            BATCH_ORDER_CANCEL_SPOT_RATE_LIMITER,
+            RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
+                .limitRefreshPeriod(Duration.ofSeconds(1))
+                .limitForPeriod(20)
+                .timeoutDuration(Duration.ofSeconds(1))
+                .build());
+    registries
+        .rateLimiters()
+        .rateLimiter(
+            BATCH_ORDER_CANCEL_OPTION_LIMITER,
             RateLimiterConfig.from(registries.rateLimiters().getDefaultConfig())
                 .limitRefreshPeriod(Duration.ofSeconds(1))
                 .limitForPeriod(10)

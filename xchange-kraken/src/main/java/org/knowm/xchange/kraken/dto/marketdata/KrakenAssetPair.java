@@ -40,6 +40,9 @@ public class KrakenAssetPair {
   @JsonProperty("lot_multiplier")
   BigDecimal volumeMultiplier;
 
+  @JsonProperty("tick_size")
+  BigDecimal tickSize;
+
   List<String> leverage_buy;
   List<String> leverage_sell;
   List<KrakenFee> fees;
@@ -56,4 +59,7 @@ public class KrakenAssetPair {
 
   @JsonProperty("ordermin")
   BigDecimal orderMin;
+
+  @JsonProperty("costmin")
+  BigDecimal costMin;
 }
